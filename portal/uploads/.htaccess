@@ -1,0 +1,12 @@
+# Deny execution of scripts.
+<FilesMatch "\.(php|phtml|php3|php4|php5|pl|py|jsp|asp|html|htm|js|cgi)$">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+# For images and documents, prevent mishandling by browser
+<IfModule mod_headers.c>
+  <FilesMatch "\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx)$">
+    Header set Content-Disposition attachment
+  </FilesMatch>
+</IfModule>
