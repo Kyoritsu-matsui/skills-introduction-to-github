@@ -1,0 +1,308 @@
+:root {
+    --primary-color: #4a90e2;
+    --primary-hover: #357abd;
+    --danger-color: #d9534f;
+    --danger-hover: #c9302c;
+    --info-color: #5bc0de;
+    --info-hover: #31b0d5;
+    --high-importance: #d9534f;
+    --medium-importance: #f0ad4e;
+    --low-importance: #4a90e2;
+    --background-color: #f7f9fc;
+    --container-bg: #ffffff;
+    --border-color: #e1e4e8;
+    --text-color: #24292e;
+    --text-secondary: #586069;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.12);
+}
+
+/* 全体のスタイル */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+    font-size: 13px; /* コンパクト化 */
+    margin: 0;
+    padding: 0;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+/* コンテナ */
+.container {
+    display: flex;
+    max-width: 1800px;
+    margin: 0 auto;
+    background-color: var(--container-bg);
+}
+
+/* サイドバー共通 */
+.sidebar-left, .sidebar-right {
+    background-color: var(--container-bg);
+    padding: 20px;
+    height: 100vh;
+    box-sizing: border-box;
+    position: sticky;
+    top: 0;
+}
+
+/* 左サイドバー */
+.sidebar-left {
+    width: 220px;
+    border-right: 1px solid var(--border-color);
+}
+.sidebar-left h2 {
+    font-size: 18px;
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--primary-color);
+}
+.sidebar-left nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.sidebar-left nav ul li a {
+    display: block;
+    padding: 10px 15px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    border-radius: 5px;
+    margin-bottom: 5px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+.sidebar-left nav ul li a:hover, .sidebar-left nav ul li a.active {
+    background-color: var(--primary-color);
+    color: #fff;
+}
+
+/* メインコンテンツ */
+.main-content {
+    flex-grow: 1;
+    padding: 25px;
+    border-left: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+}
+.main-content header h1 {
+    font-size: 24px;
+    margin-top: 0;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--primary-color);
+    color: var(--text-color);
+}
+
+/* 右サイドバー */
+.sidebar-right {
+    width: 240px;
+}
+.sidebar-right h3 {
+    font-size: 16px;
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+.sidebar-right ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.sidebar-right ul li a {
+    text-decoration: none;
+    color: var(--primary-color);
+}
+
+/* 汎用クラス */
+.error-message {
+    color: var(--danger-color);
+    background-color: #fdf2f2;
+    border: 1px solid var(--danger-color);
+    padding: 12px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+/* 掲示板スタイル */
+.notification {
+    background-color: var(--container-bg);
+    border: 1px solid var(--border-color);
+    padding: 15px 20px;
+    margin-bottom: 15px;
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.3s ease;
+}
+.notification:hover {
+    box-shadow: 0 3px 6px rgba(0,0,0,0.08), 0 3px 6px rgba(0,0,0,0.16);
+}
+.notification.importance-high { border-left: 5px solid var(--high-importance); }
+.notification.importance-medium { border-left: 5px solid var(--medium-importance); }
+.notification.importance-low { border-left: 5px solid var(--low-importance); }
+.notification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.notification-title {
+    font-size: 16px;
+    font-weight: 600;
+}
+.notification-date {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.notification-content {
+    white-space: pre-wrap;
+    color: var(--text-secondary);
+}
+.attachment a {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 12px;
+    text-decoration: none;
+    color: var(--primary-color);
+    font-weight: 500;
+}
+.attachment a::before {
+    content: '📎';
+    margin-right: 6px;
+}
+
+/* ボタン共通 */
+button, .button-link {
+    border: none;
+    padding: 8px 15px; /* コンパクト化 */
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-block;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+#toggle-notifications {
+    background-color: var(--primary-color);
+    color: white;
+}
+#toggle-notifications:hover {
+    background-color: var(--primary-hover);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* フォームスタイル */
+.form-group {
+    margin-bottom: 15px; /* コンパクト化 */
+}
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    font-size: 13px;
+}
+.form-group input[type="text"],
+.form-group input[type="file"],
+.form-group input[type="date"],
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 6px 10px; /* コンパクト化 */
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    box-sizing: border-box;
+    font-size: 13px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+.form-group .required {
+    color: var(--danger-color);
+    font-size: 12px;
+    margin-left: 5px;
+}
+button[type="submit"] {
+    background-color: var(--primary-color);
+    color: white;
+}
+button[type="submit"]:hover {
+    background-color: var(--primary-hover);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* 管理画面テーブルスタイル */
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+.admin-table th, .admin-table td {
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px 12px; /* コンパクト化 */
+    text-align: left;
+    vertical-align: middle;
+}
+.admin-table th {
+    background-color: #f7f9fc;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+.admin-table tr:last-child td {
+    border-bottom: none;
+}
+.admin-table tr:hover {
+    background-color: #f7f9fc;
+}
+.actions a, .actions button {
+    margin-right: 5px;
+    padding: 4px 8px; /* コンパクト化 */
+    border-radius: 4px;
+    color: white !important;
+    font-size: 12px;
+}
+.actions .edit-btn { background-color: var(--info-color); }
+.actions .edit-btn:hover { background-color: var(--info-hover); }
+.actions .delete-btn { background-color: var(--danger-color); }
+.actions .delete-btn:hover { background-color: var(--danger-hover); }
+
+/* ログイン画面 */
+.login-container {
+    background-color: #fff;
+    padding: 40px;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    width: 340px;
+    text-align: center;
+}
+.login-container h1 {
+    margin-bottom: 25px;
+    font-size: 22px;
+    color: var(--text-color);
+}
+.login-container input[type="text"],
+.login-container input[type="password"] {
+    width: 100%;
+    padding: 10px; /* ログインフォームは少し大きめを維持 */
+    margin-bottom: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+.login-container button {
+    width: 100%;
+    padding: 10px;
+    background-color: var(--primary-color);
+    border: none;
+    border-radius: 5px;
+    color: white;
+    font-size: 16px;
+}
+.login-container button:hover {
+    background-color: var(--primary-hover);
+}
