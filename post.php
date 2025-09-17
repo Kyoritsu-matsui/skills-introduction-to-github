@@ -27,15 +27,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
             $upload_dir = 'uploads/';
             $original_file_name = basename($_FILES['attachment']['name']);
-            // ファイル名を一意にするためにタイムスタンプを先頭に付与
-            $unique_file_name = time() . '_' . $original_file_name;
-            $file_path = $upload_dir . $unique_file_name;
 
-            if (move_uploaded_file($_FILES['attachment']['tmp_name'], $file_path)) {
-                $file_name_to_store = $original_file_name;
+            // 許可する拡張子を定義
+            $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'];
+            $file_extension = strtolower(pathinfo($original_file_name, PATHINFO_EXTENSION));
+
+            if (!in_array($file_extension, $allowed_extensions)) {
+                $error_message = '許可されていないファイル形式です。';
             } else {
-                $error_message = 'ファイルのアップロードに失敗しました。';
-                $file_path = null;
+                // ファイル名を一意にするためにタイムスタンプを先頭に付与
+                $unique_file_name = time() . '_' . $original_file_name;
+                $file_path = $upload_dir . $unique_file_name;
+
+                if (move_uploaded_file($_FILES['attachment']['tmp_name'], $file_path)) {
+                    $file_name_to_store = $original_file_name;
+                } else {
+                    $error_message = 'ファイルのアップロードに失敗しました。';
+                    $file_path = null;
+                }
             }
         }
 
