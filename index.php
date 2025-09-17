@@ -1,4 +1,4 @@
-<?php
+<?php /* Last updated: 2025-09-16 */
 session_start();
 require_once 'db_connect.php';
 
@@ -72,7 +72,10 @@ $importance_classes = [
                     <?php foreach ($notifications as $index => $notification): ?>
                         <article class="notification <?php echo $importance_classes[$notification['importance']] ?? ''; ?>" <?php if ($index >= 10) echo 'style="display: none;"'; ?>>
                             <div class="notification-header">
-                                <span class="notification-title"><?php echo htmlspecialchars($notification['title'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                <span class="notification-title">
+                                    <span class="importance-icon <?php echo $importance_classes[$notification['importance']] ?? ''; ?>"></span>
+                                    <?php echo htmlspecialchars($notification['title'], ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
                                 <span class="notification-date">投稿日: <?php echo date('Y/m/d', strtotime($notification['created_at'])); ?></span>
                             </div>
                             <div class="notification-content">
