@@ -5,28 +5,39 @@ require_once 'db_connect.php';
 // 表示するお知らせを取得
 try {
     $today = date('Y-m-d');
+    // usersテーブルと結合して投稿者名を取得
     $stmt = $pdo->prepare(
-        "SELECT * FROM notifications
-         WHERE is_visible = 1
-         AND (display_start_date IS NULL OR display_start_date <= :today1)
-         AND (display_end_date IS NULL OR display_end_date >= :today2)
-         ORDER BY created_at DESC"
+        "SELECT p.*, u.username FROM posts p
+         JOIN users u ON p.user_id = u.id
+         WHERE p.is_visible = 1
+         AND (p.start_date IS NULL OR p.start_date <= :today1)
+         AND (p.end_date IS NULL OR p.end_date >= :today2)
+         ORDER BY p.created_at DESC"
     );
     $stmt->bindParam(':today1', $today, PDO::PARAM_STR);
     $stmt->bindParam(':today2', $today, PDO::PARAM_STR);
     $stmt->execute();
-    $notifications = $stmt->fetchAll();
+    $posts = $stmt->fetchAll();
+
+    // 各投稿に添付ファイル情報を追加
+    foreach ($posts as $key => $post) {
+        $stmt_files = $pdo->prepare("SELECT * FROM attachments WHERE post_id = :post_id");
+        $stmt_files->bindParam(':post_id', $post['id'], PDO::PARAM_INT);
+        $stmt_files->execute();
+        $posts[$key]['attachments'] = $stmt_files->fetchAll();
+    }
+
 } catch (PDOException $e) {
     // エラーの場合は空の配列をセットし、エラーメッセージを表示
-    $notifications = [];
+    $posts = [];
     $db_error = "データベースから情報を取得できませんでした: " . $e->getMessage();
 }
 
 // 重要度とCSSクラスのマッピング
 $importance_classes = [
-    'high' => 'importance-high',   // 重要 (赤)
-    'medium' => 'importance-medium', // 周知 (黄)
-    'low' => 'importance-low',    // 連絡 (青)
+    'important' => 'importance-high',   // 重要 (赤)
+    'notice' => 'importance-medium', // 周知 (黄)
+    'contact' => 'importance-low',    // 連絡 (青)
 ];
 
 ?>
@@ -35,7 +46,7 @@ $importance_classes = [
 <head>
     <meta charset="UTF-8">
     <title>院内ポータルサイト</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="container">
@@ -63,33 +74,35 @@ $importance_classes = [
                 <?php endif; ?>
             </header>
 
-            <section id="notifications-section">
+            <section id="posts-section">
                 <?php if (isset($db_error)): ?>
                     <p class="error-message"><?php echo $db_error; ?></p>
-                <?php elseif (empty($notifications)): ?>
+                <?php elseif (empty($posts)): ?>
                     <p>現在、新しいお知らせはありません。</p>
                 <?php else: ?>
-                    <?php foreach ($notifications as $index => $notification): ?>
-                        <article class="notification <?php echo $importance_classes[$notification['importance']] ?? ''; ?>" <?php if ($index >= 10) echo 'style="display: none;"'; ?>>
+                    <?php foreach ($posts as $index => $post): ?>
+                        <article class="notification <?php echo $importance_classes[$post['importance']] ?? ''; ?>" <?php if ($index >= 10) echo 'style="display: none;"'; ?>>
                             <div class="notification-header">
-                                <span class="notification-title"><?php echo htmlspecialchars($notification['title'], ENT_QUOTES, 'UTF-8'); ?></span>
-                                <span class="notification-date">投稿日: <?php echo date('Y/m/d', strtotime($notification['created_at'])); ?></span>
+                                <span class="notification-title"><?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                <span class="notification-date">投稿日: <?php echo date('Y/m/d', strtotime($post['created_at'])); ?></span>
                             </div>
                             <div class="notification-content">
-                                <?php echo nl2br(htmlspecialchars($notification['content'], ENT_QUOTES, 'UTF-8')); ?>
+                                <?php echo nl2br(htmlspecialchars($post['content'], ENT_QUOTES, 'UTF-8')); ?>
                             </div>
-                            <?php if (!empty($notification['file_path']) && !empty($notification['file_name'])): ?>
-                                <div class="attachment">
-                                    <a href="<?php echo htmlspecialchars($notification['file_path'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank">
-                                        <?php echo htmlspecialchars($notification['file_name'], ENT_QUOTES, 'UTF-8'); ?>
-                                    </a>
+                            <?php if (!empty($post['attachments'])): ?>
+                                <div class="attachments">
+                                    <?php foreach ($post['attachments'] as $file): ?>
+                                        <a href="uploads/<?php echo htmlspecialchars($file['file_path'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" class="attachment">
+                                            <?php echo htmlspecialchars($file['file_name'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </a>
+                                    <?php endforeach; ?>
                                 </div>
                             <?php endif; ?>
                         </article>
                     <?php endforeach; ?>
 
-                    <?php if (count($notifications) > 10): ?>
-                        <button id="toggle-notifications">もっと見る</button>
+                    <?php if (count($posts) > 10): ?>
+                        <button id="toggle-posts">もっと見る</button>
                     <?php endif; ?>
                 <?php endif; ?>
             </section>
@@ -98,25 +111,27 @@ $importance_classes = [
         <aside class="sidebar-right">
             <h3>リンク</h3>
             <ul>
-                <li><a href="#notifications-section">周知掲示板へ</a></li>
+                <li><a href="#posts-section">周知掲示板へ</a></li>
             </ul>
         </aside>
     </div>
 
-    <?php if (count($notifications) > 10): ?>
+    <?php if (count($posts) > 10): ?>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const toggleButton = document.getElementById('toggle-notifications');
-            const notifications = document.querySelectorAll('#notifications-section .notification');
+            const toggleButton = document.getElementById('toggle-posts');
+            const posts = document.querySelectorAll('#posts-section .notification');
             let isFolded = true;
 
-            toggleButton.addEventListener('click', function() {
-                isFolded = !isFolded;
-                for (let i = 10; i < notifications.length; i++) {
-                    notifications[i].style.display = isFolded ? 'none' : 'block';
-                }
-                toggleButton.textContent = isFolded ? 'もっと見る' : '折りたたむ';
-            });
+            if (toggleButton) {
+                toggleButton.addEventListener('click', function() {
+                    isFolded = !isFolded;
+                    for (let i = 10; i < posts.length; i++) {
+                        posts[i].style.display = isFolded ? 'none' : 'block';
+                    }
+                    toggleButton.textContent = isFolded ? 'もっと見る' : '折りたたむ';
+                });
+            }
         });
     </script>
     <?php endif; ?>

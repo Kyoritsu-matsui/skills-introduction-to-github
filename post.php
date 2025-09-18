@@ -16,52 +16,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = $_POST['title'] ?? '';
     $content = $_POST['content'] ?? '';
     $importance = $_POST['importance'] ?? '';
-    $file_path = null;
-    $file_name_to_store = null;
+    $user_id = $_SESSION['user_id'];
 
     // バリデーション
-    if (empty($title) || empty($content) || empty($importance)) {
+    if (empty($title) || empty($content) || empty($importance) || empty($user_id)) {
         $error_message = 'すべての必須項目を入力してください。';
     } else {
-        // ファイルアップロード処理
-        if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-            $upload_dir = 'uploads/';
-            $original_file_name = basename($_FILES['attachment']['name']);
-            // ファイル名を一意にするためにタイムスタンプを先頭に付与
-            $unique_file_name = time() . '_' . $original_file_name;
-            $file_path = $upload_dir . $unique_file_name;
+        $pdo->beginTransaction();
+        try {
+            // 投稿をpostsテーブルに挿入
+            $stmt = $pdo->prepare(
+                "INSERT INTO posts (user_id, title, content, importance)
+                 VALUES (:user_id, :title, :content, :importance)"
+            );
+            $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
+            $stmt->bindParam(':title', $title, PDO::PARAM_STR);
+            $stmt->bindParam(':content', $content, PDO::PARAM_STR);
+            $stmt->bindParam(':importance', $importance, PDO::PARAM_STR);
+            $stmt->execute();
 
-            if (move_uploaded_file($_FILES['attachment']['tmp_name'], $file_path)) {
-                $file_name_to_store = $original_file_name;
-            } else {
-                $error_message = 'ファイルのアップロードに失敗しました。';
-                $file_path = null;
-            }
-        }
+            $post_id = $pdo->lastInsertId();
 
-        // エラーがなければデータベースに挿入
-        if (empty($error_message)) {
-            try {
-                $stmt = $pdo->prepare(
-                    "INSERT INTO notifications (title, content, importance, file_path, file_name)
-                     VALUES (:title, :content, :importance, :file_path, :file_name)"
-                );
-                $stmt->bindParam(':title', $title, PDO::PARAM_STR);
-                $stmt->bindParam(':content', $content, PDO::PARAM_STR);
-                $stmt->bindParam(':importance', $importance, PDO::PARAM_STR);
-                $stmt->bindParam(':file_path', $file_path, PDO::PARAM_STR);
-                $stmt->bindParam(':file_name', $file_name_to_store, PDO::PARAM_STR);
+            // ファイルアップロード処理
+            if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+                $upload_dir = 'uploads/';
+                $original_file_name = basename($_FILES['attachment']['name']);
+                // ファイル名を一意にする
+                $unique_file_name = uniqid('', true) . '_' . $original_file_name;
+                $file_path_on_server = $upload_dir . $unique_file_name;
 
-                if ($stmt->execute()) {
-                    // 成功したらトップページへリダイレクト
-                    header('Location: index.php');
-                    exit;
+                if (move_uploaded_file($_FILES['attachment']['tmp_name'], $file_path_on_server)) {
+                    // 添付ファイルをattachmentsテーブルに挿入
+                    $stmt_file = $pdo->prepare(
+                        "INSERT INTO attachments (post_id, file_name, file_path)
+                         VALUES (:post_id, :file_name, :file_path)"
+                    );
+                    $stmt_file->bindParam(':post_id', $post_id, PDO::PARAM_INT);
+                    $stmt_file->bindParam(':file_name', $original_file_name, PDO::PARAM_STR);
+                    $stmt_file->bindParam(':file_path', $unique_file_name, PDO::PARAM_STR);
+                    $stmt_file->execute();
                 } else {
-                    $error_message = '投稿の保存に失敗しました。';
+                    throw new Exception('ファイルのアップロードに失敗しました。');
                 }
-            } catch (PDOException $e) {
-                $error_message = 'データベースエラー: ' . $e->getMessage();
             }
+
+            $pdo->commit();
+            // 成功したらトップページへリダイレクト
+            header('Location: index.php');
+            exit;
+
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $error_message = 'エラーが発生しました: ' . $e->getMessage();
         }
     }
 }
@@ -71,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <title>新規投稿 - 院内ポータル</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="container">
@@ -109,9 +115,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <label for="importance">重要度 <span class="required">*</span></label>
                     <select id="importance" name="importance" required>
                         <option value="">選択してください</option>
-                        <option value="high">重要 (赤)</option>
-                        <option value="medium">周知 (黄)</option>
-                        <option value="low">連絡 (青)</option>
+                        <option value="important">重要 (赤)</option>
+                        <option value="notice">周知 (黄)</option>
+                        <option value="contact">連絡 (青)</option>
                     </select>
                 </div>
                 <div class="form-group">

@@ -23,99 +23,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = $_POST['title'] ?? '';
     $content = $_POST['content'] ?? '';
     $importance = $_POST['importance'] ?? '';
-    $display_start_date = !empty($_POST['display_start_date']) ? $_POST['display_start_date'] : null;
-    $display_end_date = !empty($_POST['display_end_date']) ? $_POST['display_end_date'] : null;
+    $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
+    $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
     $is_visible = isset($_POST['is_visible']) ? 1 : 0;
-    $delete_attachment = isset($_POST['delete_attachment']) ? 1 : 0;
+    $delete_attachments = $_POST['delete_attachments'] ?? [];
 
     // バリデーション
     if (empty($title) || empty($content) || empty($importance)) {
         $error_message = 'タイトル、内容、重要度は必須です。';
     } else {
+        $pdo->beginTransaction();
         try {
-            // 現在のファイル情報を取得
-            $stmt_current = $pdo->prepare("SELECT file_path, file_name FROM notifications WHERE id = :id");
-            $stmt_current->bindParam(':id', $id, PDO::PARAM_INT);
-            $stmt_current->execute();
-            $current_notification = $stmt_current->fetch();
-            $current_file_path = $current_notification['file_path'];
-            $current_file_name = $current_notification['file_name'];
+            // 1. 投稿内容の更新
+            $sql_update_post = "UPDATE posts SET
+                                title = :title,
+                                content = :content,
+                                importance = :importance,
+                                start_date = :start_date,
+                                end_date = :end_date,
+                                is_visible = :is_visible
+                            WHERE id = :id";
+            $stmt_update_post = $pdo->prepare($sql_update_post);
+            $stmt_update_post->bindParam(':title', $title, PDO::PARAM_STR);
+            $stmt_update_post->bindParam(':content', $content, PDO::PARAM_STR);
+            $stmt_update_post->bindParam(':importance', $importance, PDO::PARAM_STR);
+            $stmt_update_post->bindParam(':start_date', $start_date);
+            $stmt_update_post->bindParam(':end_date', $end_date);
+            $stmt_update_post->bindParam(':is_visible', $is_visible, PDO::PARAM_INT);
+            $stmt_update_post->bindParam(':id', $id, PDO::PARAM_INT);
+            $stmt_update_post->execute();
 
-            // 添付ファイル削除の処理
-            if ($delete_attachment && !empty($current_file_path)) {
-                if (file_exists($current_file_path)) {
-                    unlink($current_file_path);
+            // 2. 添付ファイル削除の処理
+            if (!empty($delete_attachments)) {
+                foreach ($delete_attachments as $attachment_id) {
+                    // ファイルパスを取得してサーバーから削除
+                    $stmt_get_file = $pdo->prepare("SELECT file_path FROM attachments WHERE id = :id");
+                    $stmt_get_file->bindParam(':id', $attachment_id, PDO::PARAM_INT);
+                    $stmt_get_file->execute();
+                    $file = $stmt_get_file->fetch();
+                    if ($file && file_exists('uploads/' . $file['file_path'])) {
+                        unlink('uploads/' . $file['file_path']);
+                    }
+                    // データベースから削除
+                    $stmt_delete_file = $pdo->prepare("DELETE FROM attachments WHERE id = :id");
+                    $stmt_delete_file->bindParam(':id', $attachment_id, PDO::PARAM_INT);
+                    $stmt_delete_file->execute();
                 }
-                $current_file_path = null;
-                $current_file_name = null;
             }
 
-            // 新しいファイルのアップロード処理
-            if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-                // 既存のファイルを削除
-                if (!empty($current_file_path) && file_exists($current_file_path)) {
-                    unlink($current_file_path);
-                }
-                // 新しいファイルをアップロード
+            // 3. 新しいファイルのアップロード処理
+            if (isset($_FILES['new_attachment']) && $_FILES['new_attachment']['error'] === UPLOAD_ERR_OK) {
                 $upload_dir = 'uploads/';
-                $original_file_name = basename($_FILES['attachment']['name']);
-                $unique_file_name = time() . '_' . $original_file_name;
-                $new_file_path = $upload_dir . $unique_file_name;
-                if (move_uploaded_file($_FILES['attachment']['tmp_name'], $new_file_path)) {
-                    $current_file_path = $new_file_path;
-                    $current_file_name = $original_file_name;
+                $original_file_name = basename($_FILES['new_attachment']['name']);
+                $unique_file_name = uniqid('', true) . '_' . $original_file_name;
+                $file_path_on_server = $upload_dir . $unique_file_name;
+
+                if (move_uploaded_file($_FILES['new_attachment']['tmp_name'], $file_path_on_server)) {
+                    $stmt_add_file = $pdo->prepare(
+                        "INSERT INTO attachments (post_id, file_name, file_path)
+                         VALUES (:post_id, :file_name, :file_path)"
+                    );
+                    $stmt_add_file->bindParam(':post_id', $id, PDO::PARAM_INT);
+                    $stmt_add_file->bindParam(':file_name', $original_file_name, PDO::PARAM_STR);
+                    $stmt_add_file->bindParam(':file_path', $unique_file_name, PDO::PARAM_STR);
+                    $stmt_add_file->execute();
                 } else {
-                    $error_message = 'ファイルのアップロードに失敗しました。';
+                    throw new Exception('新しいファイルのアップロードに失敗しました。');
                 }
             }
 
-            // データベースを更新
-            if (empty($error_message)) {
-                $sql = "UPDATE notifications SET
-                            title = :title,
-                            content = :content,
-                            importance = :importance,
-                            display_start_date = :display_start_date,
-                            display_end_date = :display_end_date,
-                            is_visible = :is_visible,
-                            file_path = :file_path,
-                            file_name = :file_name
-                        WHERE id = :id";
-                $stmt = $pdo->prepare($sql);
-                $stmt->bindParam(':title', $title, PDO::PARAM_STR);
-                $stmt->bindParam(':content', $content, PDO::PARAM_STR);
-                $stmt->bindParam(':importance', $importance, PDO::PARAM_STR);
-                $stmt->bindParam(':display_start_date', $display_start_date);
-                $stmt->bindParam(':display_end_date', $display_end_date);
-                $stmt->bindParam(':is_visible', $is_visible, PDO::PARAM_INT);
-                $stmt->bindParam(':file_path', $current_file_path, PDO::PARAM_STR);
-                $stmt->bindParam(':file_name', $current_file_name, PDO::PARAM_STR);
-                $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+            $pdo->commit();
+            header('Location: admin.php');
+            exit;
 
-                if ($stmt->execute()) {
-                    header('Location: admin.php');
-                    exit;
-                } else {
-                    $error_message = '更新に失敗しました。';
-                }
-            }
-        } catch (PDOException $e) {
-            $error_message = "データベースエラー: " . $e->getMessage();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $error_message = "更新処理中にエラーが発生しました: " . $e->getMessage();
         }
     }
 }
 
-// 編集対象のデータを取得
+// 編集対象の投稿と添付ファイルを取得
 try {
-    $stmt = $pdo->prepare("SELECT * FROM notifications WHERE id = :id");
-    $stmt->bindParam(':id', $id, PDO::PARAM_INT);
-    $stmt->execute();
-    $notification = $stmt->fetch();
+    // 投稿データを取得
+    $stmt_post = $pdo->prepare("SELECT * FROM posts WHERE id = :id");
+    $stmt_post->bindParam(':id', $id, PDO::PARAM_INT);
+    $stmt_post->execute();
+    $post = $stmt_post->fetch();
 
-    if (!$notification) {
+    if (!$post) {
+        // 投稿が存在しない場合はリダイレクト
         header('Location: admin.php');
         exit;
     }
+
+    // 添付ファイルを取得
+    $stmt_files = $pdo->prepare("SELECT * FROM attachments WHERE post_id = :post_id");
+    $stmt_files->bindParam(':post_id', $id, PDO::PARAM_INT);
+    $stmt_files->execute();
+    $attachments = $stmt_files->fetchAll();
+
 } catch (PDOException $e) {
     die("データベースから情報を取得できませんでした: " . $e->getMessage());
 }
@@ -125,7 +132,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <title>投稿編集 - 院内ポータル</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="container">
@@ -153,51 +160,59 @@ try {
             <form action="edit.php?id=<?php echo $id; ?>" method="POST" enctype="multipart/form-data">
                 <div class="form-group">
                     <label for="title">タイトル <span class="required">*</span></label>
-                    <input type="text" id="title" name="title" value="<?php echo htmlspecialchars($notification['title'], ENT_QUOTES, 'UTF-8'); ?>" required>
+                    <input type="text" id="title" name="title" value="<?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?>" required>
                 </div>
                 <div class="form-group">
                     <label for="content">内容 <span class="required">*</span></label>
-                    <textarea id="content" name="content" rows="10" required><?php echo htmlspecialchars($notification['content'], ENT_QUOTES, 'UTF-8'); ?></textarea>
+                    <textarea id="content" name="content" rows="10" required><?php echo htmlspecialchars($post['content'], ENT_QUOTES, 'UTF-8'); ?></textarea>
                 </div>
                 <div class="form-group">
                     <label for="importance">重要度 <span class="required">*</span></label>
                     <select id="importance" name="importance" required>
-                        <option value="high" <?php if ($notification['importance'] == 'high') echo 'selected'; ?>>重要 (赤)</option>
-                        <option value="medium" <?php if ($notification['importance'] == 'medium') echo 'selected'; ?>>周知 (黄)</option>
-                        <option value="low" <?php if ($notification['importance'] == 'low') echo 'selected'; ?>>連絡 (青)</option>
+                        <option value="important" <?php if ($post['importance'] == 'important') echo 'selected'; ?>>重要 (赤)</option>
+                        <option value="notice" <?php if ($post['importance'] == 'notice') echo 'selected'; ?>>周知 (黄)</option>
+                        <option value="contact" <?php if ($post['importance'] == 'contact') echo 'selected'; ?>>連絡 (青)</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="display_start_date">表示開始日</label>
-                    <input type="date" id="display_start_date" name="display_start_date" value="<?php echo htmlspecialchars($notification['display_start_date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                    <label for="start_date">表示開始日</label>
+                    <input type="date" id="start_date" name="start_date" value="<?php echo htmlspecialchars($post['start_date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                 </div>
                 <div class="form-group">
-                    <label for="display_end_date">表示終了日</label>
-                    <input type="date" id="display_end_date" name="display_end_date" value="<?php echo htmlspecialchars($notification['display_end_date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                    <label for="end_date">表示終了日</label>
+                    <input type="date" id="end_date" name="end_date" value="<?php echo htmlspecialchars($post['end_date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                 </div>
                 <div class="form-group">
                     <label>
-                        <input type="checkbox" name="is_visible" value="1" <?php if ($notification['is_visible']) echo 'checked'; ?>>
+                        <input type="checkbox" name="is_visible" value="1" <?php if ($post['is_visible']) echo 'checked'; ?>>
                         この投稿を表示する
                     </label>
                 </div>
+
                 <div class="form-group">
-                    <label for="attachment">添付ファイル</label>
-                    <?php if (!empty($notification['file_path']) && !empty($notification['file_name'])): ?>
-                        <p>
-                            現在のファイル:
-                            <a href="<?php echo htmlspecialchars($notification['file_path'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank">
-                                <?php echo htmlspecialchars($notification['file_name'], ENT_QUOTES, 'UTF-8'); ?>
-                            </a>
-                        </p>
-                        <label>
-                            <input type="checkbox" name="delete_attachment" value="1">
-                            添付ファイルを削除する
-                        </label>
+                    <label>現在の添付ファイル</label>
+                    <?php if (empty($attachments)): ?>
+                        <p>添付ファイルはありません。</p>
+                    <?php else: ?>
+                        <?php foreach ($attachments as $file): ?>
+                            <div>
+                                <input type="checkbox" name="delete_attachments[]" value="<?php echo $file['id']; ?>" id="delete_file_<?php echo $file['id']; ?>">
+                                <label for="delete_file_<?php echo $file['id']; ?>">
+                                    <a href="uploads/<?php echo htmlspecialchars($file['file_path'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank">
+                                        <?php echo htmlspecialchars($file['file_name'], ENT_QUOTES, 'UTF-8'); ?>
+                                    </a>
+                                    (削除する)
+                                </label>
+                            </div>
+                        <?php endforeach; ?>
                     <?php endif; ?>
-                    <input type="file" id="attachment" name="attachment">
-                    <p style="font-size:12px; color:#777;">新しいファイルをアップロードすると、既存の添付ファイルは上書きされます。</p>
                 </div>
+
+                <div class="form-group">
+                    <label for="new_attachment">新しい添付ファイルを追加</label>
+                    <input type="file" id="new_attachment" name="new_attachment">
+                </div>
+
                 <button type="submit">更新する</button>
             </form>
         </main>
